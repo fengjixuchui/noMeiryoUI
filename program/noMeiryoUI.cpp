@@ -1,5 +1,5 @@
 /*
-noMeiryoUI (C) 2005,2012-2019 Tatsuhiko Shoji
+noMeiryoUI (C) 2005,2012-2020 Tatsuhiko Shoji
 The sources for noMeiryoUI are distributed under the MIT open source license
 */
 // noMeiryoUI.cpp : アプリケーションのエントリ ポイントを定義します。
@@ -34,7 +34,7 @@ static bool use7Compat = true;
 bool useResource = false;
 bool has8Preset = true;
 bool has10Preset = true;
-TCHAR helpFileName[64];
+TCHAR helpFileName[MAX_PATH];
 RECT myMonitorLect;
 bool firstMonitor = false;
 DWORD helpPid;
@@ -63,6 +63,7 @@ void initializeLocale(void)
 	TCHAR *p;
 	TCHAR langWork[64];
 	TCHAR findPath[MAX_PATH];
+	TCHAR langFileName[MAX_PATH];
 
 	::GetModuleFileName(NULL, iniPath, _MAX_PATH);
 	p = _tcsrchr(iniPath, '\\');
@@ -109,7 +110,8 @@ void initializeLocale(void)
 		HANDLE found = FindFirstFile(findPath, &fileInfo);
 		if (found != INVALID_HANDLE_VALUE) {
 			// 言語_地域形式のファイルがある場合
-			_tcscpy(iniPath, findPath);
+			_tcscpy(langFileName, findPath);
+
 			_tcscpy(helpFileName, langWork);
 			_tcscat(helpFileName, _T(".chm"));
 		}
@@ -124,23 +126,26 @@ void initializeLocale(void)
 			found = FindFirstFile(findPath, &fileInfo);
 			if (found != INVALID_HANDLE_VALUE) {
 				// 言語のファイルがある場合
-				_tcscpy(iniPath, findPath);
+				_tcscpy(langFileName, findPath);
+
 				_tcscpy(helpFileName, langWork);
 				_tcscat(helpFileName, _T(".chm"));
 			} else {
 				// 言語ファイルが存在しない場合
-				_tcscat(iniPath, _T("Default.lng"));
-				_tcscpy(helpFileName, _T("English.chm"));
+				_tcscpy(langFileName, iniPath);
+
+				_tcscpy(helpFileName, iniPath);
+				_tcscat(helpFileName, _T("English.chm"));
 			}
 		}
 		// Language support routine ends here.
 
-		readResourceFile(iniPath);
-		readResult = readFontResource8(iniPath);
+		readResourceFile(langFileName);
+		readResult = readFontResource8(langFileName);
 		if (!readResult) {
 			has8Preset = false;
 		}
-		readResult = readFontResource10(iniPath);
+		readResult = readFontResource10(langFileName);
 		if (!readResult) {
 			has10Preset = false;
 		}
@@ -568,7 +573,13 @@ void NoMeiryoUI::parseOption(TCHAR *param, int argCount)
 		case 1:
 			// 設定ファイル名
 			if (_tcscmp(_T("--"), param)) {
-				_tcscpy(settingFile, param);
+				if ((_tcschr(param, '\\') == NULL) && (_tcschr(param, '/') == NULL)) {
+					GetCurrentDirectory(MAX_PATH, settingFile);
+					_tcscat(settingFile, _T("\\"));
+				} else {
+					settingFile[0] = _T('\0');
+				}
+				_tcscat(settingFile, param);
 			}
 			break;
 		default:
@@ -760,6 +771,17 @@ void NoMeiryoUI::applyResource()
 	setChildText(IDCANCEL, langResource[26].c_str());
 	setChildFont(IDCANCEL, displayFont);
 
+	setChildText(ID_APPLY, langResource[71].c_str());
+	setChildFont(ID_APPLY, displayFont);
+	setChildText(ID_APPLY_ALL, langResource[71].c_str());
+	setChildFont(ID_APPLY_ALL, displayFont);
+
+	setChildText(IDC_GROUP_ALL, langResource[72].c_str());
+	setChildFont(IDC_GROUP_ALL, displayFont);
+
+	setChildText(IDC_GROUP_INDIVIDUAL, langResource[73].c_str());
+	setChildFont(IDC_GROUP_INDIVIDUAL, displayFont);
+
 	setChildFont(IDC_STATIC_APP_TITLE, displayFont);
 
 	setChildFont(IDC_STATIC_VERNO, displayFont);
@@ -935,6 +957,9 @@ INT_PTR NoMeiryoUI::OnCommand(WPARAM wParam)
 			OnBnClickedAll();
 			EndDialog(hWnd, LOWORD(wParam));
 			return BaseDialog::OnCommand(wParam);
+		case ID_APPLY_ALL:
+			OnBnClickedAll();
+			return (INT_PTR)0;
 		case IDM_OPEN:
 			OnLoad();
 			return (INT_PTR)0;
@@ -949,6 +974,12 @@ INT_PTR NoMeiryoUI::OnCommand(WPARAM wParam)
 			break;
 		case IDM_EXIT:
 			EndDialog(hWnd, LOWORD(wParam));
+			break;
+		case ID_APPLY:
+			result = OnBnClickedOk();
+			if (!result) {
+				return (INT_PTR)0;
+			}
 			break;
 		case IDM_SET_8:
 			OnSet8();
@@ -2181,7 +2212,7 @@ void NoMeiryoUI::SetWinVer(void)
 				getWin10Ver(buf, major, minor);
 			} else {
 				_stprintf(buf,
-					_T("Windows Version:Windows Server 2016 (%d.%d)"),
+					_T("Windows Version:Windows Server 2016/2019 (%d.%d)"),
 					major,minor);
 			}
 			break;
